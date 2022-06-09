@@ -35,6 +35,10 @@ export default {
     endpoint() {
       return this.makeGlancesUrl('alert');
     },
+    limit() {
+      if (!this.options.limit) return 0;
+      return Math.max(0, Math.min(10, this.options.limit));
+    },
   },
   filters: {},
   methods: {
@@ -43,10 +47,12 @@ export default {
       if (!alertData || alertData.length === 0) {
         this.noResults = true;
       } else {
-        const alerts = [];
+        let alerts = [];
         alertData.forEach((alert) => {
           alerts.push({
-            time: timestampToDateTime(alert[0] * 1000),
+            time: timestampToDateTime(
+              alert[0] * 1000, { weekday: 'short', day: 'numeric', month: 'short' },
+            ),
             ongoing: (alert[1] === -1),
             timeAgo: getTimeAgo(alert[0] * 1000),
             lasted: alert[1] ? getTimeDifference(alert[0] * 1000, alert[1] * 1000) : 'Ongoing',
@@ -57,6 +63,7 @@ export default {
             + `${round(alert[5])}%<br>Max: ${round(alert[6])}%`,
           });
         });
+        if (this.limit) alerts = alerts.slice(0, this.limit);
         this.alerts = alerts;
       }
     },
@@ -72,7 +79,6 @@ export default {
     align-items: center;
     color: var(--widget-text-color);
     .time {
-      max-width: 25%;
       margin: 0.25rem 0;
       span.ongoing {
         display: block;
@@ -94,7 +100,7 @@ export default {
       }
     }
     .severity {
-      padding: 0.25rem;
+      padding: .25rem .85rem;
       font-size: 0.85rem;
       border-radius: var(--curve-factor);
       color: var(--black);

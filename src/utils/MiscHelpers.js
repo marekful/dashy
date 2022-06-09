@@ -25,9 +25,9 @@ export const sanitize = (string) => {
 };
 
 /* Given a timestamp, returns formatted date, in local format */
-export const timestampToDate = (timestamp) => {
+export const timestampToDate = (timestamp, format = null) => {
   const localFormat = navigator.language;
-  const dateFormat = {
+  const dateFormat = format || {
     weekday: 'short', day: 'numeric', month: 'short', year: 'numeric',
   };
   const date = new Date(timestamp).toLocaleDateString(localFormat, dateFormat);
@@ -35,15 +35,15 @@ export const timestampToDate = (timestamp) => {
 };
 
 /* Given a timestamp, returns formatted time in local format */
-export const timestampToTime = (timestamp) => {
+export const timestampToTime = (timestamp, format = null) => {
   const localFormat = navigator.language;
-  const timeFormat = { hour: 'numeric', minute: 'numeric', second: 'numeric' };
+  const timeFormat = format || { hour: 'numeric', minute: 'numeric', second: 'numeric' };
   return Intl.DateTimeFormat(localFormat, timeFormat).format(new Date(timestamp));
 };
 
 /* Given a timestamp, returns both human Date and Time */
-export const timestampToDateTime = (timestamp) => {
-  return `${timestampToDate(timestamp)} at ${timestampToTime(timestamp)}`;
+export const timestampToDateTime = (timestamp, dateFormat = null, timeFormat = null) => {
+  return `${timestampToDate(timestamp, dateFormat)} at ${timestampToTime(timestamp, timeFormat)}`;
 };
 
 /* Given a 2-letter country ISO code, return the countries name */

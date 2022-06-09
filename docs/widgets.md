@@ -1783,12 +1783,19 @@ Lists recent high resource usage alerts (e.g. CPU, mem, IO, load, temp)
 
 <p align="center"><img width="400" src="https://i.ibb.co/w01NX5R/gl-alerts.png" /></p>
 
+##### Options
+
+**Field** | **Type** | **Required** | **Description**
+--- | --- | --- | ---
+**`limit`** | `number` |  _Optional_ | Limit the number of results displayed, value between `1` and `10`. Defaults to `0` in which case no limit is applied.
+
 ##### Example 
 
 ```yaml
 - type: gl-alerts
   options:
     hostname: http://192.168.130.2:61208
+    limit: 5
 ```
 
 ---
