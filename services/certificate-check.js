@@ -67,10 +67,22 @@ const processCertificates = (certificates) => {
   return Promise.all(promises);
 };
 
+const sanitiseInput = (params) => {
+  const h = params.get('host');
+  const p = params.get('port');
+
+  const host = h.split('.').map(n => n.toLowerCase())
+                .filter(n => /^[a-z0-9\-]+$/.test(n)).join('.');
+  const port = parseInt(p) || 0;
+
+  return { host, port };
+};
+
 module.exports = (paramStr, render) => {
   const params = new URLSearchParams(paramStr);
-  const host = params.get('host');
-  const port = params.get('port');
+  const { host, port } = sanitiseInput(params);
+
+  if (!host || !port) return render(JSON.stringify({code: 8}));
 
   retrieveCertificates(host, port)
     .then(processCertificates)
