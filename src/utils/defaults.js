@@ -44,7 +44,8 @@ module.exports = {
     rebuild: '/config-manager/rebuild',
     systemInfo: '/system-info',
     corsProxy: '/cors-proxy',
-    certificateCheck: '/certificate-check',
+    fetchCertificate: '/fetch-certificate',
+    fetchCertificates: '/fetch-certificates',
   },
   /* List of built-in themes, to be displayed within the theme-switcher dropdown */
   builtInThemes: [

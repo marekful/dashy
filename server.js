@@ -27,7 +27,7 @@ const rebuild = require('./services/rebuild-app'); // A script to programmatical
 const systemInfo = require('./services/system-info'); // Basic system info, for resource widget
 const sslServer = require('./services/ssl-server'); // TLS-enabled web server
 const corsProxy = require('./services/cors-proxy'); // Enables API requests to CORS-blocked services
-const certificateCheck = require('./services/certificate-check');
+const { fetchCertificate, fetchCertificates } = require('./services/x509-certificate-details');
 
 /* Helper functions, and default config */
 const printMessage = require('./services/print-message'); // Function to print welcome msg on start
@@ -89,13 +89,23 @@ const app = express()
     }
   })
   // GET endpoint to execute SSL certificate check
-  .use(ENDPOINTS.certificateCheck, (req, res) => {
+  .use(ENDPOINTS.fetchCertificate, (req, res) => {
     try {
-      certificateCheck(req.url, async (results) => {
+      fetchCertificate(req.url, async (results) => {
         await res.end(results);
       });
     } catch (e) {
-      printWarning(`Error running certificate check for ${req.host}:${req.port}\n`, e);
+      printWarning(`Error running certificate check for ${req.url}\n`, e);
+    }
+  })
+  // GET endpoint to execute multiple SSL certificate checks
+  .use(ENDPOINTS.fetchCertificates, (req, res) => {
+    try {
+      fetchCertificates(req.url, async (results) => {
+        await res.end(results);
+      });
+    } catch (e) {
+      printWarning(`Error running certificate check for ${req.url}\n`, e);
     }
   })
   // POST Endpoint used to save config, by writing conf.yml to disk

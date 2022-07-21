@@ -36,7 +36,7 @@ ENV PORT=80 \
 WORKDIR ${DIRECTORY}
 
 # Install tini for initialization and tzdata for setting timezone
-RUN apk add --no-cache tzdata tini
+RUN apk add --no-cache tzdata tini openssl
 
 # Copy built application from build phase
 COPY --from=BUILD_IMAGE /app ./
