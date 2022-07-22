@@ -16,7 +16,7 @@ const newLine = '\n';
 const E_CONNECT_COMMAND_FAILED = 'Couldn\'t connect to host:port';
 const E_CONNECT_NO_RESPONSE = 'Did not receive a response from host:port';
 const E_CONNECT_UNEXPECTED_RESPONSE = 'Unexpected response when reading certificates from host:port';
-const E_NO_CERTIFICATES = 'host:port did not return any certificates';
+const E_PARSE_NO_CERTIFICATES = 'host:port did not return any certificates';
 const E_PARSE_COMMAND_FAILED = 'Couldn\'t parse certificate :n retreived from host:port';
 const E_PARSE_NO_DATES = 'Couldn\'t find validity period dates in certificate :n from host:port';
 const E_PARSE_NO_SUBJECT_OR_ISSUER = 'Couldn\'t find subject or issuer in certificate :n from host:port';
@@ -24,13 +24,15 @@ const E_INVALID_INPUT = 'Invalid input provided for host:port';
 const E_INVALID_INPUT_M = 'Couldn\t parse hosts specification';
 const E_UNEXPECTED_ERROR = 'Unexpected error';
 const E_CERTIFICATE_VERIFY_FAIL = 'The certificate chain didn\'t pass verification';
+const E_INVALID_WILDCARD_HOST = 'Wildcard certificate with invalid host';
+const E_PARSE_NO_MAIN_SUBJECT = 'Couldn\'t find certificate subject';
 
 // error code message map
 const errorCodes = {
   1: { code: 'E_CONNECT_COMMAND_FAILED', message: E_CONNECT_COMMAND_FAILED },
   2: { code: 'E_CONNECT_NO_RESPONSE', message: E_CONNECT_NO_RESPONSE },
   3: { code: 'E_CONNECT_UNEXPECTED_RESPONSE', message: E_CONNECT_UNEXPECTED_RESPONSE },
-  4: { code: 'E_NO_CERTIFICATES', message: E_NO_CERTIFICATES },
+  4: { code: 'E_PARSE_NO_CERTIFICATES', message: E_PARSE_NO_CERTIFICATES },
   5: { code: 'E_PARSE_COMMAND_FAILED', message: E_PARSE_COMMAND_FAILED },
   6: { code: 'E_PARSE_NO_DATES', message: E_PARSE_NO_DATES },
   7: { code: 'E_PARSE_NO_SUBJECT_OR_ISSUER', message: E_PARSE_NO_SUBJECT_OR_ISSUER },
@@ -38,6 +40,8 @@ const errorCodes = {
   9: { code: 'E_INVALID_INPUT_M', message: E_INVALID_INPUT_M },
   10: { code: 'E_UNEXPECTED_ERROR', message: E_UNEXPECTED_ERROR },
   11: { code: 'E_CERTIFICATE_VERIFY_FAIL', message: E_CERTIFICATE_VERIFY_FAIL },
+  12: { code: 'E_INVALID_WILDCARD_HOST', message: E_INVALID_WILDCARD_HOST },
+  13: { code: 'E_PARSE_NO_MAIN_SUBJECT', message: E_PARSE_NO_MAIN_SUBJECT },
 }
 
 // openssl (1.1.1) verify return codes (https://www.openssl.org/docs/man1.1.1/man1/verify.html)
@@ -121,6 +125,11 @@ const opensslCodes = {
   76: 'X509_V_ERR_OCSP_CERT_UNKNOWN',
 };
 
+// Error message constants for errors not caught by openssl
+const nonOpensslCodes = {
+  7: 'The wildcard certificate for subject:cn does not cover :host',
+};
+
 /**
  * Helper to generate an error object
  * @param {Number} errorCode internal error number
@@ -131,29 +140,34 @@ const opensslCodes = {
  */
 const makeError = (host, port, errorCode, nodeError = null, certificateIndex = null) => {
   const code = errorCodes[errorCode].code;
-  const message = errorCodes[errorCode].message.replace('host:port', `${host}:${port}`);
+  const message = errorCodes[errorCode].message
+                    .replace('host:port', `${host}:${port}`)
+                    .replace(':host', host);
   const status = { code: errorCode, text: 'error' };
   const error = { code, message };
   if (certificateIndex) message.replace(':n', certificateIndex);
-  if (nodeError && nodeError.message) {
+  if (nodeError && nodeError.message) { // nodejs exec error
     console.error(nodeError);
     const m = nodeError.message.match(/\.c:\d+:([^\n]+)\n/);
     if (m && m.length > 1) error.reason = m[1];
     const n = nodeError.message.match(/:([^:]+):[a-z0-9/_]+\.c:\d+:\n/);
     if (n && n.length > 1) error.reason = `${n[1]} ${error.reason ?? ''}`;
-  } else if (nodeError && nodeError.code) {
+  } else if (nodeError && nodeError.code && nodeError.code > 0) { // openssl verify error
     error.reason = nodeError.text;
     error.verify = {code: nodeError.code, message: opensslCodes[nodeError.code] };
     if (nodeError.code === 10) status.text = 'expired';
+  } else if (nodeError && nodeError.text) { // additional error not caught by openssl
+    error.reason = nodeError.text;
+    if (nodeError.code === -7) status.text = 'invalid';
   }
   return { host, port, error, status };
 };
 
 /** 
- * Retrieve and verify the certificate chain for host:port (openssl s_client) 
+ * Retrieve and verify the certificate chain for host:port (openssl s_client)
  * @param {String} host FQDN of host
  * @param {Number} port port on host to connect to
- * @returns {Promise} resolving an array of encoded certificate strings 
+ * @returns {Promise} resolving an array of encoded certificate strings
  */
 const retrieveCertificateChain = (host, port) => {
   return new Promise((resolve, reject) => {
@@ -163,7 +177,7 @@ const retrieveCertificateChain = (host, port) => {
       if (!stdout) return reject(makeError(host, port, 2));
       // take the certificate (chain) section in output
       const parts = stdout.split(boundary);
-      if (parts.length < 2) return reject(makeError(host, port, 3));
+      if (parts.length < 3) return reject(makeError(host, port, 3));
       // and slice the encoded certificate strings into an array
       const certs = parts[1].split(`${newLine}${endCert}`);
       const certificates = [];
@@ -181,15 +195,27 @@ const retrieveCertificateChain = (host, port) => {
       const text = ((s0.length > 2 && s0[2]) ? s0[2].trim() : 'unknown');
       const code = s0.length > 1 && s0[1] ? parseInt(s0[1]) || 0 : -15;
       const status = { code, text };
-      // add error for non-zero openssl verify return code but proceed to parse certs
+      // find main subject canonical name in output
+      const m =  parts[2].match(/^subject=.*CN\s+=\s+([^\n]+)$/m);
+      if (!m || m.length !== 2) return reject(makeError(host, port, 13));
+      const subjectCn = m[1];
+      // validate host against wildcard certificate
       let error;
-      if (code !== 0) {
-        const err = makeError(host, port, 11, { text, code });
+      if (/^\*\..*$/.test(subjectCn)) {
+        const valid = isValidWildcardHost(subjectCn, host);
+        if (!valid) {
+          const text = nonOpensslCodes[7].replace('subject:cn', subjectCn).replace(':host', host);
+          error = makeError(host, port, 12, { code: -7, text });
+        }
+      }
+      // add error for non-zero openssl verify return code but proceed to parse certs
+      if (code !== 0 || error) {
+        const err = error || makeError(host, port, 11, { text, code });
         status.code = err.status.code;
         status.text = err.status.text;
         error = err.error;
       }
-      // return certifcate status and certificate chain
+      // return certifcate status and certificate chain details
       resolve({ host, port, status, certificates, error });
     });
   });
@@ -201,7 +227,7 @@ const retrieveCertificateChain = (host, port) => {
  * @param {Number} port port on host (used in error message only)
  * @param {String} certificate the encoded certificate string to parse
  * @param {Number} index certificate chain list index id (used in error message only)
- * @returns {Primise} resolving a dictionary of certificate details
+ * @returns {Promise} resolving a dictionary of certificate details
  */
 const parseCertificate = (host, port, certificate, index) => {
   return new Promise((resolve, reject) => {
@@ -246,6 +272,20 @@ const parseCertificate = (host, port, certificate, index) => {
       resolve({ issuer, subject, validFrom, validTo, fingerprints, daysLeft });
     });
   });
+};
+
+// ----- // Additional error checking // ----- //
+
+/**
+ * Test if a wildcard certificate (e.g. CN=*.example.com) is valid for the provided host
+ * @param {String} subjectCn the wildcard canonical name
+ * @param {String} host FQDN of host
+ * @returns {Boolean} validation result
+ */
+ const isValidWildcardHost = (subjectCn, host) => {
+  const checkHost = host.split('.').map((h, i) => i === 0 ? '*' : h).join('.');
+  if (subjectCn !== checkHost) return false;
+  return true;
 };
 
 // ----- // Process single host // ----- //
