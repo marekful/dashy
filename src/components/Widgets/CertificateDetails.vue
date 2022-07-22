@@ -54,10 +54,10 @@
             <span class="port">port </span><code>{{ certificate.port }}</code>
         </p>
         <p class="certificate-status">
-          <i v-if="statusWarning(certificate.status) && certificate.status.text != 'error'"
+          <i v-if="statusWarning(certificate.status) && statusNotError(certificate.status)"
              :class="`far fa-exclamation-triangle ${summaryClass(certificate.status)}`"></i>
           <span :class="`status status-${certificate.status.text.toLowerCase()}`">
-            <strong>{{ statusText(certificate.status.text) }}</strong>
+            <strong>{{ statusText(certificate.status) }}</strong>
           </span>
           <span v-if="!statusWarning(certificate.status)">
             <span v-if="!!daysText(certificate.status.daysLeft)" class="days-days">
@@ -67,7 +67,7 @@
               {{ daysText(certificate.status.daysLeft) }}
             </span>
           </span>
-          <span v-else-if="certificate.status.text != 'error'"
+          <span v-else-if="statusNotError(certificate.status)"
                 :class="summaryClass(certificate.status)">
             {{ summaryText(certificate.status) }}
           </span>
@@ -383,14 +383,23 @@ export default {
       else extra = '';
       return `host ${extra}`;
     },
-    statusText(statusText) {
-      switch (statusText.toLowerCase()) {
+    statusText(status) {
+      const text = status.text.toLowerCase();
+      const code = status.code || 0;
+      switch (text) {
         case 'ok':
           return 'Certificate is VALID';
         case 'expired':
           return 'Certificate EXPIRED';
+        case 'invalid':
+          return 'Certificate NOT VALID for host';
         case 'error':
-          return 'Certificate VERIFY FAILED';
+          switch (code) {
+            case 1:
+              return 'TLS connection ERROR';
+            case 11: default:
+              return 'Certificate VERIFY FAILED';
+          }
         default:
           return '';
       }
@@ -401,14 +410,19 @@ export default {
           return 'file-certificate';
         case 'expired':
           return 'calendar-exclamation';
-        case 'error':
+        case 'error': case 'invalid':
           return 'exclamation-square';
       }
     },
     statusWarning(status) {
-      const error = status.text.toLowerCase() === 'error';
+      const text = status.text.toLowerCase();
+      const error = text === 'error' || text === 'invalid';
       if (!error && status.daysLeft > 0 && status.daysLeft < this.warnDaysBeforeExpiry) return true;
       return error;
+    },
+    statusNotError(status) {
+      const text = status.text.toLowerCase();
+      return text !== 'error' && text !== 'invalid';
     },
     daysText(days) {
       if (typeof days !== 'number') return '';
@@ -481,7 +495,7 @@ export default {
     width: 80%;
     min-height: 14em;
     background: var(--widget-background-color);
-    margin: 0 8%;
+    margin: 0 7.5%;
     color: var(--widget-text-color);
     padding: 0 .5em;
     cursor: pointer;
@@ -520,7 +534,7 @@ export default {
     .status-ok {
       color: var(--success);
     }
-    .status-error {
+    .status-error, .status-invalid {
       color: var(--error);
     }
     .status-expired {
