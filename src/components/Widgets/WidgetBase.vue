@@ -98,6 +98,7 @@ const COMPAT = {
   'public-ip': 'PublicIp',
   'rss-feed': 'RssFeed',
   sabnzbd: 'Sabnzbd',
+  'ssl-certificates': 'CertificateDetails',
   'sports-scores': 'SportsScores',
   'stat-ping': 'StatPing',
   'stock-price-chart': 'StockPriceChart',
