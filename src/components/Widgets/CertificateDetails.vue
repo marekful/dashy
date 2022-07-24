@@ -1,14 +1,13 @@
 <template>
 <div class="certificates-content">
   <!-- host cards container -->
-  <div class="host-cards" :style="`height: ${listSize * 3}em`">
+  <div class="host-cards" :style="`height: ${listSize * 3 + 3}em`">
     <!-- open card modal overlay -->
     <div @click="closeCard" class="overlay"></div>
     <!-- host cards list -->
-    <div v-for="(certificate, idx) in certificates" :key="idx"
-         :class="`host-card ${certificate.error ? 'error-view' : ''}`"
+    <div v-for="(certificate, idx) in certificates" :key="idx" class="host-card"
          :style="`top: ${(idx * 3 + 0.5)}em`" @click="openCard"
-         :data-num-certs="certificate.certsInChain">
+         :data-num-certs="certificate.certsInChain" :data-has-error="!!certificate.error">
       <!-- closed card - host status summary -->
       <div :class="`summary ${summaryClass(certificate.status)}`">
         {{ summaryText(certificate.status) }}
@@ -83,17 +82,17 @@
                 <i v-if="unknownIssuer(cert.issuer)" class="fal fa-exclamation-triangle"></i>
                 {{ issuerOrg(cert.issuer) }}
               </strong>
-              <span v-if="!!cert.issuer.cn" class="cn textove" v-tooltip="cert.issuer.cn">
+              <span v-if="!!cert.issuer.cn" class="cn textover" v-tooltip="cert.issuer.cn">
                 ({{ cert.issuer.cn }})
               </span>
             </div>
             <div v-if="cidx > 0" class="subject textover">
               <label>Subject</label>
-              <strong v-if="cert.subject.org" class="org textove"
+              <strong v-if="cert.subject.org" class="org textover"
                       v-tooltip="`${cert.subject.org} (${cert.subject.cn})`">
                 {{ cert.subject.org }}
               </strong>
-              <span class="cn textove" v-tooltip="cert.subject.cn">({{ cert.subject.cn }})</span>
+              <span class="cn textover" v-tooltip="cert.subject.cn">({{ cert.subject.cn }})</span>
             </div>
             <div class="valid-until">
               <label>Valid Until</label>
@@ -277,19 +276,20 @@ export default {
       }
       const selected = target.classList.contains('selected');
       const numCerts = parseInt(target.getAttribute('data-num-certs'), 10) || 0;
+      const hasError = target.getAttribute('data-has-error');
       return {
-        overlay, target, selected, numCerts,
+        overlay, target, selected, numCerts, hasError,
       };
     },
     /* Open and close individual host card */
     openCard(event) {
       const {
-        overlay, target, selected, numCerts,
+        overlay, target, selected, numCerts, hasError,
       } = this.cardsUI(event);
       if (selected) return;
       overlay.style.display = 'block';
       target.classList.add('selected');
-      if (numCerts === 0) this.openError();
+      if (numCerts === 0 || hasError) this.openError(event);
     },
     closeCard(event) {
       event.stopPropagation();
@@ -396,7 +396,7 @@ export default {
         case 'error':
           switch (code) {
             case 1:
-              return 'TLS connection ERROR';
+              return 'Connection ERROR';
             case 11: default:
               return 'Certificate VERIFY FAILED';
           }
@@ -455,15 +455,14 @@ export default {
 </script>
 
 <style scoped lang="scss">
+@import '@/styles/style-helpers.scss';
+
 /* main container */
 .certificates-content {
   margin-right: -1em;
   margin-left: -1em;
   margin-top: .75em;
   /* cards list scrollpane */
-  .host-cards::-webkit-scrollbar {
-      width: 0px; /* For Chrome, Safari, and Opera */
-  }
   .host-cards {
     position: relative;
     display: block;
@@ -471,8 +470,7 @@ export default {
     margin: 0 0 .25em 0;
     overflow-x: hidden;
     overflow-y: auto;
-    scrollbar-width: none; /* For Firefox */
-    -ms-overflow-style: none; /* For Internet Explorer and Edge */
+    @extend .scroll-bar;
     /* modal overlay */
     .overlay {
       position: sticky;
