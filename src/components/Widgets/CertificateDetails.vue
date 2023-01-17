@@ -368,8 +368,8 @@ export default {
     summaryClass(status) {
       switch (status.code) {
         case 0:
-          if (status.daysLeft < this.alertDaysBeforeExpiry) return 'alert status-expired';
-          if (status.daysLeft < this.warnDaysBeforeExpiry) return 'warning status-error';
+          if (status.daysLeft <= this.alertDaysBeforeExpiry) return 'alert status-expired';
+          if (status.daysLeft <= this.warnDaysBeforeExpiry) return 'warning status-error';
           return `status-${status.text.toLowerCase()}`;
         default:
           return `status-${status.text.toLowerCase()}`;
